@@ -1,0 +1,72 @@
+name: oracle-ords-admin
+
+services:
+  oracle-free-full-23ai:
+    container_name: oracle-free-full-23ai
+    image: oracle-free-full-23ai:23ai
+    build:
+      context: ..
+      dockerfile: containerfile/Containerfile
+    ports:
+      - "1522:1521"
+    cap_add:
+      - SYS_NICE
+    environment:
+      ORACLE_PWD: OraclePwd123
+      ORACLE_PDB: FREEPDB1
+    volumes:
+      - oracle-free-full-23ai-data:/opt/oracle/oradata
+    networks:
+      - oracle-net
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'select 1 from dual;' | sqlplus -s system/OraclePwd123@localhost:1521/FREEPDB1 | grep -q 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  init-ords-variables:
+    container_name: init-ords-variables
+    image: alpine:latest
+    command: >
+      sh -c "mkdir -p /opt/oracle/variables &&
+             echo 'CONN_STRING=sys/OraclePwd123@oracle-free-full-23ai:1521/FREEPDB1' > /opt/oracle/variables/conn_string.txt &&
+             chmod 444 /opt/oracle/variables/conn_string.txt"
+    volumes:
+      - ords-variables:/opt/oracle/variables
+    networks:
+      - oracle-net
+    restart: "no"
+
+  ords:
+    container_name: ords
+    image: container-registry.oracle.com/database/ords-developer:24.4.0
+    depends_on:
+      init-ords-variables:
+        condition: service_completed_successfully
+      oracle-free-full-23ai:
+        condition: service_healthy
+    ports:
+      - "8181:8181"
+    volumes:
+      - ords-config:/etc/ords/config
+      - type: volume
+        source: ords-variables
+        target: /opt/oracle/variables
+        read_only: true
+    networks:
+      - oracle-net
+
+volumes:
+  oracle-free-full-23ai-data:
+    name: oracle-free-full-23ai-data
+
+  ords-config:
+    name: ords-config
+
+  ords-variables:
+    name: ords-variables
+
+networks:
+  oracle-net:
+    name: oracle-net
