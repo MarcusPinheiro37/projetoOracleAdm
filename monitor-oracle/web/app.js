@@ -303,9 +303,30 @@ function updateSqlTable(result) {
       const cpuTime = getValue(row, 'cpu_time', 'CPU_TIME') || 0;
       const bufferGets = getValue(row, 'buffer_gets', 'BUFFER_GETS') || 0;
 
+      /*
+        Campo novo vindo do endpoint ORDS:
+        sql_fulltext
+
+        Deixei fallback para sql_text caso algum endpoint antigo
+        ainda retorne apenas a versão resumida.
+      */
+      const sqlFullText =
+        getValue(row, 'sql_fulltext', 'SQL_FULLTEXT') ||
+        getValue(row, 'sql_text', 'SQL_TEXT') ||
+        'SQL_FULLTEXT não retornado pelo endpoint.';
+
+      const encodedSql = encodeURIComponent(String(sqlFullText));
+      // console.log(encodedSql)
       return `
         <tr>
-          <td><code>${escapeHtml(sqlId)}</code></td>
+          <td>
+            <code
+              class="sql-id-hover"
+              tabindex="0"
+              data-sql-fulltext="${encodedSql}"
+              aria-label="Passe o mouse para visualizar o SQL completo"
+            >${escapeHtml(sqlId)}</code>
+          </td>
           <td>${formatNumber(executions)}</td>
           <td>${formatMicroseconds(elapsedTime)}</td>
           <td>${formatMicroseconds(cpuTime)}</td>
@@ -314,6 +335,8 @@ function updateSqlTable(result) {
       `;
     })
     .join('');
+
+  bindSqlTooltips();
 }
 
 function updateTablespacesTable(result) {
@@ -475,4 +498,181 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+let sqlTooltipElement = null;
+
+function bindSqlTooltips() {
+  const elements = document.querySelectorAll('.sql-id-hover');
+
+  elements.forEach((element) => {
+    element.addEventListener('mouseenter', showSqlTooltip);
+    element.addEventListener('mousemove', moveSqlTooltip);
+    element.addEventListener('mouseleave', hideSqlTooltip);
+
+    element.addEventListener('focus', showSqlTooltipByFocus);
+    element.addEventListener('blur', hideSqlTooltip);
+  });
+}
+
+function getSqlTooltipElement() {
+  if (sqlTooltipElement) {
+    return sqlTooltipElement;
+  }
+
+  sqlTooltipElement = document.createElement('div');
+  sqlTooltipElement.className = 'sql-floating-tooltip';
+  sqlTooltipElement.innerHTML = `
+    <div class="sql-tooltip-header">
+      <span>SQL_FULLTEXT</span>
+      <small>Consulta executada no Oracle</small>
+    </div>
+    <pre class="sql-tooltip-code"></pre>
+  `;
+
+  document.body.appendChild(sqlTooltipElement);
+
+  return sqlTooltipElement;
+}
+
+function showSqlTooltip(event) {
+  const element = event.currentTarget;
+  const tooltip = getSqlTooltipElement();
+
+  const encodedSql = element.getAttribute('data-sql-fulltext') || '';
+  const sqlFullText = decodeURIComponent(encodedSql);
+
+  const codeElement = tooltip.querySelector('.sql-tooltip-code');
+  codeElement.textContent = formatSqlForDisplay(sqlFullText);
+
+  tooltip.classList.add('visible');
+
+  moveSqlTooltip(event);
+}
+
+function showSqlTooltipByFocus(event) {
+  const element = event.currentTarget;
+  const tooltip = getSqlTooltipElement();
+
+  const encodedSql = element.getAttribute('data-sql-fulltext') || '';
+  const sqlFullText = decodeURIComponent(encodedSql);
+
+  const codeElement = tooltip.querySelector('.sql-tooltip-code');
+  codeElement.textContent = formatSqlForDisplay(sqlFullText);
+
+  tooltip.classList.add('visible');
+
+  const rect = element.getBoundingClientRect();
+
+  positionSqlTooltip({
+    clientX: rect.left,
+    clientY: rect.bottom
+  });
+}
+
+function moveSqlTooltip(event) {
+  positionSqlTooltip(event);
+}
+
+function positionSqlTooltip(event) {
+  const tooltip = getSqlTooltipElement();
+
+  const padding = 16;
+  const offset = 16;
+
+  let left = event.clientX + offset;
+  let top = event.clientY + offset;
+
+  const rect = tooltip.getBoundingClientRect();
+
+  if (left + rect.width + padding > window.innerWidth) {
+    left = event.clientX - rect.width - offset;
+  }
+
+  if (top + rect.height + padding > window.innerHeight) {
+    top = window.innerHeight - rect.height - padding;
+  }
+
+  left = Math.max(padding, left);
+  top = Math.max(padding, top);
+
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function hideSqlTooltip() {
+  const tooltip = getSqlTooltipElement();
+  tooltip.classList.remove('visible');
+}
+
+function formatSqlForDisplay(sql) {
+  if (!sql || !String(sql).trim()) {
+    return 'SQL não disponível.';
+  }
+
+  let text = String(sql)
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  /*
+    Formatação simples para facilitar leitura.
+    Não é um parser SQL completo, mas já melhora bastante
+    para SELECTs vindos de v$sqlarea/v$sql.
+  */
+  text = text
+    .replace(/\bSELECT\b/gi, 'SELECT\n  ')
+    .replace(/\bFROM\b/gi, '\nFROM')
+    .replace(/\bWHERE\b/gi, '\nWHERE')
+    .replace(/\bGROUP\s+BY\b/gi, '\nGROUP BY')
+    .replace(/\bORDER\s+BY\b/gi, '\nORDER BY')
+    .replace(/\bHAVING\b/gi, '\nHAVING')
+    .replace(/\bUNION\s+ALL\b/gi, '\nUNION ALL')
+    .replace(/\bUNION\b/gi, '\nUNION')
+    .replace(/\bFETCH\s+FIRST\b/gi, '\nFETCH FIRST')
+    .replace(/\bOFFSET\b/gi, '\nOFFSET')
+    .replace(/\bINNER\s+JOIN\b/gi, '\nINNER JOIN')
+    .replace(/\bLEFT\s+JOIN\b/gi, '\nLEFT JOIN')
+    .replace(/\bLEFT\s+OUTER\s+JOIN\b/gi, '\nLEFT OUTER JOIN')
+    .replace(/\bRIGHT\s+JOIN\b/gi, '\nRIGHT JOIN')
+    .replace(/\bRIGHT\s+OUTER\s+JOIN\b/gi, '\nRIGHT OUTER JOIN')
+    .replace(/\bFULL\s+JOIN\b/gi, '\nFULL JOIN')
+    .replace(/\bFULL\s+OUTER\s+JOIN\b/gi, '\nFULL OUTER JOIN')
+    .replace(/\bJOIN\b/gi, '\nJOIN')
+    .replace(/\bON\b/gi, '\n  ON')
+    .replace(/\bAND\b/gi, '\n  AND')
+    .replace(/\bOR\b/gi, '\n  OR')
+    .replace(/\s*,\s*/g, ',\n  ');
+
+  const linhas = text
+    .split('\n')
+    .map((linha) => linha.trim())
+    .filter(Boolean)
+    .map((linha) => {
+      if (
+        linha.startsWith('SELECT') ||
+        linha.startsWith('FROM') ||
+        linha.startsWith('WHERE') ||
+        linha.startsWith('GROUP BY') ||
+        linha.startsWith('ORDER BY') ||
+        linha.startsWith('HAVING') ||
+        linha.startsWith('UNION') ||
+        linha.startsWith('FETCH FIRST') ||
+        linha.startsWith('OFFSET') ||
+        linha.includes('JOIN')
+      ) {
+        return linha;
+      }
+
+      if (
+        linha.startsWith('AND') ||
+        linha.startsWith('OR') ||
+        linha.startsWith('ON')
+      ) {
+        return `  ${linha}`;
+      }
+
+      return `  ${linha}`;
+    });
+
+  return linhas.join('\n');
 }

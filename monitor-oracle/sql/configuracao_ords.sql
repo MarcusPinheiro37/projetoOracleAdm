@@ -138,6 +138,7 @@ BEGIN
     p_source_type => ORDS.source_type_query,
     p_source      => q'[
       SELECT sql_id,
+ 	 		 sql_fulltext,
              executions,
              elapsed_time,
              cpu_time,
