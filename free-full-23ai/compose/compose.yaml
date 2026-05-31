@@ -40,22 +40,21 @@ services:
 
   ords:
     container_name: ords
-    image: container-registry.oracle.com/database/ords-developer:24.4.0
+    image: container-registry.oracle.com/database/ords:25.3.1
     depends_on:
-      init-ords-variables:
-        condition: service_completed_successfully
       oracle-free-full-23ai:
         condition: service_healthy
     ports:
-      - "8181:8181"
+      - "8181:8080"
+    environment:
+      DBHOST: oracle-free-full-23ai
+      DBPORT: 1521
+      DBSERVICENAME: FREEPDB1
+      ORACLE_PWD: OraclePwd123
+      ORDS_PWD: OrdsPwd123
+      ORACLE_USER_PWD: OracleUserPwd123
     volumes:
       - ords-config:/etc/ords/config
-      - type: volume
-        source: ords-variables
-        target: /opt/oracle/variables
-        read_only: true
-    networks:
-      - oracle-net
 
 volumes:
   oracle-free-full-23ai-data:
