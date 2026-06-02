@@ -882,25 +882,3 @@ A solução utiliza o ORDS como camada de API REST, evitando a necessidade de cr
 10. Testar endpoints no navegador ou curl.exe
 11. Conectar o frontend HTML aos endpoints
 ```
-
----
-
-## 25. Resumo da estrutura recomendada do projeto
-
-```text
-monitor-oracle/
-├── README.md
-├── web/
-│   ├── index.html
-│   ├── app.js
-│   └── style.css
-├── sql/
-│   ├── 01_usuario_monitor.sql
-│   ├── 02_grants_monitoramento.sql
-│   ├── 03_ords_enable_schema.sql
-│   ├── 04_ords_endpoints.sql
-│   └── consultas_monitoramento.sql
-└── docs/
-    ├── metricas.md
-    └── roteiro_apresentacao.md
-```

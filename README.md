@@ -1,4 +1,8 @@
 # Projeto Oracle ADM - Oracle Free 23ai com ORDS e Dashboard de Monitoramento
+Ariel Coelho Faria
+Liliane Reis dos Santos
+Marcus Magno Pinheiro Rodrigues
+Mateus Abreu Ferreira
 
 ## Descrição
 
